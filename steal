@@ -1,0 +1,99 @@
+local player = game.Players["menstaymen12"]
+
+
+
+local blocks = {}
+local target = workspace[player.Name.." Aircraft"]
+local target2 = game:GetService("ReplicatedStorage").TemporarlyAircraftStorage[player.Name]
+local zone
+for _, zonei in workspace.BuildingZones:GetChildren() do
+    if zonei.Owner.Value == player then zone = zonei end
+end
+
+local function getindex(instance)
+    for i, child in instance.Parent:GetChildren() do
+        if child==instance then return i end
+    end
+end
+local function PlotVecToGlobalVec(plotvec:Vector3)
+    local vec1 = zone.Position + Vector3.new(plotvec.X*2.5,(plotvec.Y+0.4)*2.5,plotvec.Z*2.5)
+    return vec1
+end
+local function normalizeVector3(v: Vector3, epsilon)
+	epsilon = epsilon or 1e-3
+
+	local function fix(n)
+		local nearest = math.round(n)
+		if math.abs(n - nearest) < epsilon then
+			return nearest + (nearest < 0 and 0.1 or -0.1)
+		end
+		return n
+	end
+
+	return Vector3.new(
+		fix(v.X),
+		fix(v.Y),
+		fix(v.Z)
+	)
+end
+local function GlobalVecToPlotVec(globalvec: Vector3)
+    local localVec = globalvec - zone.Position
+    local result = Vector3.new(
+        localVec.X / 2.5        ,
+        (localVec.Y / 2.5) - 0.4,
+        localVec.Z / 2.5        
+    )
+    print(result)
+    local result = normalizeVector3(result)
+    local round = Vector3.new(
+        math.round(result.X),
+        math.round(result.Y),
+        math.round(result.Z)
+    )
+    print(round)
+    return round
+end
+
+---------------------
+for _, block in target:GetChildren() do
+    if block:IsA("Model") then
+        local tempblock = target2:GetChildren()[getindex(block)+2]
+        
+        table.insert(blocks, {
+                    POS = GlobalVecToPlotVec(tempblock:GetPivot().Position),
+                    ROT = tempblock.PrimaryPart.CFrame,
+                    ID = block.ID.Value,
+                    MAT = "",
+                    CON = {},
+                    KYB = {},
+                    CLR = {},
+        })
+    end
+end
+
+
+local function printTableDetailed(tbl, indent, visited)
+	indent = indent or 0
+	visited = visited or {}
+
+	if visited[tbl] then
+		print(string.rep(" ", indent) .. "<cycle detected>")
+		return
+	end
+	visited[tbl] = true
+
+	for k, v in pairs(tbl) do
+		local prefix = string.rep(" ", indent)
+		local keyInfo = "[" .. tostring(k) .. "] (" .. typeof(k) .. ")"
+
+		if typeof(v) == "table" then
+			print(prefix .. keyInfo .. " = table {")
+			printTableDetailed(v, indent + 2, visited)
+			print(prefix .. "}")
+		else
+			print(prefix .. keyInfo .. " = " .. tostring(v) .. " (" .. typeof(v) .. ")")
+		end
+	end
+end
+printTableDetailed(blocks)
+_G.dat = blocks
