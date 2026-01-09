@@ -1,0 +1,302 @@
+local blockselecteddata = _G.selectdatatable
+
+local function checkstatus(ID)
+    repeat task.wait() until workspace.Camera.BuildObjects:FindFirstChildOfClass("Model")
+    return workspace.Camera.BuildObjects:FindFirstChildOfClass("Model").ID.Value ~= ID
+end
+local function setblock(id)
+	game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.Bindables.BlockSelected:Fire(id,nil,nil,blockselecteddata["BlockSelected"][id])
+end
+local function setblock2(id)
+	game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.Bindables.BlockSelected2:Fire(id,nil,nil,blockselecteddata["BlockSelected2"][id])
+end
+
+function _G.selectpreviewblock(ID)
+  if checkstatus(ID) then
+    game:GetService("Players").LocalPlayer.PlayerGui.BuildGui.EnableBuilding:Fire()
+    if checkstatus(ID) then setblock(ID) end
+    if checkstatus(ID) then setblock2(ID) end
+  end
+end
+--_G.selectpreviewblock(BlockID)
+----------------------
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Veko-Studio/PCEOS-FUNCTIONS/main/function_positionpreviewblock.luau"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Veko-Studio/PCEOS-FUNCTIONS/main/function_rotatepreviewblock.luau"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Veko-Studio/PCEOS-FUNCTIONS/main/function_placepreviewblock.luau"))()
+local valueremote = game:GetService("ReplicatedStorage").Remotes.UpdateValue
+local buildfunctionsmodule = require(game:GetService("ReplicatedStorage").ModuIes.BuildFunctions)
+local function PlotVecToGlobalVec(plotvec:Vector3,zone)
+    local vec1 = zone.Position + Vector3.new(plotvec.X*2.5,(plotvec.Y+0.4)*2.5,plotvec.Z*2.5)
+    return vec1
+end
+local function SetCodePosition(pos)
+    _G.posorig = _G.posorig or buildfunctionsmodule.FindVoxelFromPosition
+    buildfunctionsmodule.FindVoxelFromPosition = function(...)
+        if pos == nil then
+            return _G.posorig(...)
+        end
+        return pos
+    end
+end
+local function reloadsave()
+    task.wait()
+    game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.Bindables.SavePressed:Fire(true)
+    pcall(function()firesignal(game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.SaveMenu.Container.SlotMenu.Grid.Slot0.MouseButton1Click)end)
+    pcall(function()firesignal(game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.SaveMenu.Container.InfoMenu.SaveButton.MouseButton1Click)end)
+    task.wait()
+    pcall(function()firesignal(game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.SaveWarning.SaveButton.MouseButton1Click)end)
+    task.wait(0.05)
+    pcall(function()firesignal(game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.SaveMenu.Container.InfoMenu.LoadButton.MouseButton1Click)end)
+    game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.Bindables.SavePressed:Fire(false)
+    repeat task.wait()
+        local e = game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.LoadWarning
+        if e.Visible then firesignal(e.LoadButton.MouseButton1Click) end
+    until game:GetService("Players").LocalPlayer.PlayerGui.LoadingBar.Frame.Size ~= UDim2.new(0,0,0,0)
+    repeat task.wait() until game:GetService("Players").LocalPlayer.PlayerGui.LoadingBar.Frame.Size == UDim2.new(0,0,0,0)
+end
+local function GetZone(player)
+    local zone
+    for _, zonei in workspace.BuildingZones:GetChildren() do
+        if zonei.Owner.Value == player then zone = zonei end
+    end
+    return zone
+end
+local function getAircraftModelAtPosition(position)
+    local aircraftFolder = workspace:WaitForChild("PIayerAircraft"):WaitForChild(game.Players.LocalPlayer.Name)
+
+    for _, model in pairs(aircraftFolder:GetChildren()) do
+        if model:IsA("Model") then
+            local cf, size = model:GetBoundingBox()
+            
+            -- Early rejection: check if bounding box could possibly overlap
+            local center = cf.Position
+            local half = size * 0.5
+            
+            -- Quick AABB (axis-aligned bounding box) test with expanded radius
+            local dx = math.abs(center.X - position.X)
+            local dy = math.abs(center.Y - position.Y)
+            local dz = math.abs(center.Z - position.Z)
+            
+            -- If center is too far, skip expensive corner checks
+            if dx > half.X + 2.5 or dy > half.Y + 2.5 or dz > half.Z + 2.5 then
+                continue
+            end
+            
+            -- Only check corners if bounding box is close enough
+            local offsets = {
+                Vector3.new( half.X,  half.Y,  half.Z),
+                Vector3.new( half.X,  half.Y, -half.Z),
+                Vector3.new( half.X, -half.Y,  half.Z),
+                Vector3.new( half.X, -half.Y, -half.Z),
+                Vector3.new(-half.X,  half.Y,  half.Z),
+                Vector3.new(-half.X,  half.Y, -half.Z),
+                Vector3.new(-half.X, -half.Y,  half.Z),
+                Vector3.new(-half.X, -half.Y, -half.Z),
+            }
+
+            for _, offset in ipairs(offsets) do
+                local corner = cf:PointToWorldSpace(offset)
+                
+                if math.abs(corner.X - position.X) <= 2.5
+                and math.abs(corner.Y - position.Y) <= 2.5
+                and math.abs(corner.Z - position.Z) <= 2.5 then
+                    return model
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function checkblockfrompos(plotpos)
+    return getAircraftModelAtPosition(PlotVecToGlobalVec(plotpos,GetZone(game.Players.LocalPlayer))) and true or false
+end
+
+
+
+
+
+
+
+
+
+local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+-- Global override
+_G.mouseHitOverride = nil
+-- Hook mouse metatable
+local mousemt = getrawmetatable(mouse)
+setreadonly(mousemt, false)
+local oldIndex = mousemt.__index
+mousemt.__index = newcclosure(function(self, key)
+    if self == mouse and _G.mouseHitOverride then
+        local obj = _G.mouseHitOverride
+        -- Override mouse.Hit
+        if key == "Hit" then
+            if obj:IsA("Model") then
+                local cf = obj:GetBoundingBox()
+                return cf
+            elseif obj:IsA("BasePart") then
+                return obj.CFrame
+            end
+        end
+        -- Override mouse.Target
+        if key == "Target" then
+            if obj:IsA("Model") then
+                return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+            elseif obj:IsA("BasePart") then
+                return obj
+            end
+        end
+        -- Override mouse.TargetSurface
+        if key == "TargetSurface" then
+            return Enum.NormalId.Top
+        end
+    end
+    
+    return oldIndex(self, key)
+end)
+setreadonly(mousemt, true)
+function _G.setMouseHitOverride(obj) _G.mouseHitOverride = obj end
+--_G.setMouseHitOverride(workspace.PIayerAircraft.menstaymen12.BlockStd.BlockStd)
+local function paintpart(part,color)
+    local button = game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.Toolbar.PaintButton
+    if button.Icon.ImageColor3 == Color3.fromRGB(0,125,121) then firesignal(button.MouseButton1Click) end
+    game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.Bindables.ColorChanged:Fire(color)
+    _G.setMouseHitOverride(part)
+    _G.placepreviewblock()
+    task.wait(0.01)
+    firesignal(button.MouseButton1Click)
+    _G.setMouseHitOverride()
+end
+------------------------------------------------------------------------------------------------------------------------------------
+--data
+local blocks = {}
+local deletecurrentbuild = true
+local HttpService = game:GetService("HttpService")
+
+
+
+
+
+blocks = _G.dat
+
+
+
+
+
+print(#blocks)
+------------------------------------------------------------------------------------------------------------------------------------
+--optimizing table
+table.sort(blocks, function(a, b)
+    return a.ID < b.ID
+end)
+--clearing plot
+if deletecurrentbuild then game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.Bindables.DeleteAllPressed:Fire() task.wait(1) end
+--placing them
+game:GetService("Players").LocalPlayer.PlayerGui.BuildGui.EnableBuilding:Fire()
+for i, block in blocks do
+    if i % 20 == 0 then
+        _G.positionpreviewblock()
+        SetCodePosition()
+        task.wait(0.1)
+        reloadsave()
+        task.wait(0.1)
+        game:GetService("Players").LocalPlayer.PlayerGui.BuildGui.EnableBuilding:Fire()
+    end
+    local startTime = tick() --timing quota
+    --data etracting
+    POS = block.POS
+    ROT = block.ROT
+    ID  = block.ID
+    if not (POS.X<=-26 or POS.X>=26 or POS.Y<=0 or POS.Y>=39 or POS.Z<=-26 or POS.Z>=26 or getAircraftModelAtPosition(POS)) then--checkblockfrompos(POS)) then
+        --selectblock
+        _G.selectpreviewblock(ID)
+        --safety check bypassing
+        _G.positionpreviewblock()
+        SetCodePosition()
+        --position
+        zone = GetZone(game.Players.LocalPlayer)
+        globalpos = PlotVecToGlobalVec(POS,zone)
+        _G.positionpreviewblock(globalpos)
+        SetCodePosition(POS-Vector3.new(0,1,0))
+        --rotation
+        _G.rotatepreviewblock(ROT)
+        --placing
+        task.wait(0.095)
+        _G.placepreviewblock()
+        print("ts1")
+        --getting block
+        local blockr
+        c = 0
+        repeat task.wait();blockr = getAircraftModelAtPosition(globalpos) c=c+1 until blockr or c==100
+        if blockr then
+            print("ts4")
+            --timing quota
+            local elapsed = tick() - startTime
+            local remaining = 0.095 - elapsed
+            if remaining > 0 then
+                --task.wait(remaining)
+            else
+                warn("ts5------------------------")
+            end
+        else
+            print("ts3")
+            break
+        end
+    end
+end
+task.wait(1)
+--cleanup1
+_G.positionpreviewblock()
+SetCodePosition()
+reloadsave()
+--applying material,color,configs,keybinds
+for i, block in blocks do
+    print("wadaw25")
+    POS = block.POS
+    ROT = block.ROT
+    ID  = block.ID
+    MAT = block.MAT
+    CON = block.CON
+    KYB = block.KYB
+    CLR = block.CLR
+
+    zone = GetZone(game.Players.LocalPlayer)
+    globalpos = PlotVecToGlobalVec(POS,zone)
+    local blockr
+    local c = 0
+    repeat task.wait();blockr = getAircraftModelAtPosition(globalpos) c=c+1 until blockr or c==20
+    print("block:",blockr)
+    valueremote:FireServer(MAT,blockr:FindFirstChild("Material"))
+    for _, config in CON do
+        local name = config[1]
+        local value = config[2]
+        pcall(function()
+            local valinstance = blockr.Configuration:FindFirstChild(name)
+            warn(valinstance,value)
+            valueremote:FireServer(value,valinstance)
+        end)
+    end
+    for _, config in KYB do
+        local name = config[1]
+        local Keybind = config[2]
+        pcall(function()
+            local valinstance = blockr.Events:FindFirstChild(name)
+            warn(valinstance,Keybind)
+            valueremote:FireServer(Keybind,valinstance.KeyBind)
+        end)
+    end
+    for _, config in CLR do
+        local name = config[1]
+        local color = config[2]
+        pcall(function()
+            local instance = blockr:FindFirstChild(name,true)
+            paintpart(instance,color)
+        end)
+    end
+end
+--cleanup2
+_G.positionpreviewblock()
+SetCodePosition()
+reloadsave()
