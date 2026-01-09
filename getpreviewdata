@@ -1,0 +1,224 @@
+task.spawn(function()
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Initialize global storage
+_G.selectdatatable = _G.selectdatatable or {
+    BlockSelected = {},
+    BlockSelected2 = {}
+}
+
+local capturedData = _G.selectdatatable
+
+-- Table Comparison Function for BlockSelected Data
+local function checkMissingEntries(inputTable)
+    -- Reference IDs that should exist (values don't matter for comparison)
+    local ReferenceIDs = {
+        ["BlockSelected"] = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,24,25,26,27,28,29,30,31,32,33,34,35,37,38,39,40,43,44,45,46,47,48,49,50,51,53,57,58,60,61,62,63,64,65,66,67,68,69,70,71,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,214,215,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,239,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254",
+        ["BlockSelected2"] = "16,17,24,27,28,29,30,31,37,38,40,43,44,46,49,58,60,61,64,73,76,79,82,83,85,87,91,92,95,101,102,109,112,114,115,116,120,121,122,123,124,125,129,130,132,133,134,135,139,140,141,142,143,144,152,153,155,156,157,158,159,160,161,163,165,168,180,193,194,198,199,206,211,212,214,215,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,232,233,234,235,237,238,239,240,251,252"
+    }
+    
+    -- Parse reference IDs into lookup tables
+    local referenceData = {}
+    for category, idString in pairs(ReferenceIDs) do
+        referenceData[category] = {}
+        for id in string.gmatch(idString, "([^,]+)") do
+            referenceData[category][tonumber(id)] = true
+        end
+    end
+    
+    -- Count missing entries
+    local missingCount = 0
+    
+    -- Check BlockSelected
+    if referenceData["BlockSelected"] then
+        for id, _ in pairs(referenceData["BlockSelected"]) do
+            local hasEntry = inputTable["BlockSelected"] and inputTable["BlockSelected"][id]
+            if not hasEntry then
+                missingCount = missingCount + 1
+            end
+        end
+    end
+    
+    -- Check BlockSelected2
+    if referenceData["BlockSelected2"] then
+        for id, _ in pairs(referenceData["BlockSelected2"]) do
+            local hasEntry = inputTable["BlockSelected2"] and inputTable["BlockSelected2"][id]
+            if not hasEntry then
+                missingCount = missingCount + 1
+            end
+        end
+    end
+    
+    return missingCount-101
+end
+
+local function cleanTable(tbl)
+    local cleaned = {
+        BlockSelected = {},
+        BlockSelected2 = {}
+    }
+
+    -- Track seen IDs
+    local seenBS = {}
+    local seenBS2 = {}
+
+    -- Remove duplicates inside BlockSelected
+    for id, value in pairs(tbl.BlockSelected or {}) do
+        if not seenBS[id] then
+            seenBS[id] = true
+            cleaned.BlockSelected[id] = value
+        end
+    end
+
+    -- Remove duplicates inside BlockSelected2
+    for id, value in pairs(tbl.BlockSelected2 or {}) do
+        if not seenBS2[id] then
+            seenBS2[id] = true
+            cleaned.BlockSelected2[id] = value
+        end
+    end
+
+    -- Remove entries from BlockSelected2 that exist in BlockSelected
+    for id in pairs(cleaned.BlockSelected2) do
+        if cleaned.BlockSelected[id] then
+            cleaned.BlockSelected2[id] = nil
+        end
+    end
+
+    return cleaned
+end
+
+local function updateGlobalStorage()
+    local dr = cleanTable(capturedData)
+    
+    -- Update the global table with cleaned data
+    _G.selectdatatable = dr
+    
+    -- Check and print missing entries count
+    local missing = checkMissingEntries(dr)
+    print(string.format("📊 Progress: %d blocks still needed", missing))
+    if missing == 0 then
+        print("🎉 ALL BLOCKS CAPTURED! Collection complete!")
+    end
+end
+
+repeat task.wait() until player.PlayerGui:FindFirstChild("BuildGUI2")
+repeat task.wait() until player.PlayerGui.BuildGUI2:FindFirstChild("Bindables")
+
+local bindables = player.PlayerGui.BuildGUI2.Bindables
+
+-- Listen to BlockSelected
+if bindables:FindFirstChild("BlockSelected") then
+    bindables.BlockSelected.Event:Connect(function(arg1, arg2, arg3, arg4)
+        if arg1 and arg4 then
+            print(string.format("[BlockSelected] Captured Block ID: %d", arg1))
+            capturedData.BlockSelected[arg1] = arg4
+            updateGlobalStorage()
+        end
+    end)
+    print("✓ Listening to BlockSelected.Event")
+else
+    warn("✗ BlockSelected not found")
+end
+
+-- Listen to BlockSelected2
+if bindables:FindFirstChild("BlockSelected2") then
+    bindables.BlockSelected2.Event:Connect(function(arg1, arg2, arg3, arg4)
+        if arg1 and arg4 then
+            print(string.format("[BlockSelected2] Captured Block ID: %d", arg1))
+            capturedData.BlockSelected2[arg1] = arg4
+            updateGlobalStorage()
+        end
+    end)
+    print("✓ Listening to BlockSelected2.Event")
+else
+    warn("✗ BlockSelected2 not found")
+end
+
+print("\n=== Block String Capturer Active ===")
+print("Data is stored in: _G.selectdatatable")
+print("Select blocks to capture their strings...")
+print("Usage: local str = _G.selectdatatable['BlockSelected2'][1]")
+print("       local str = _G.selectdatatable['BlockSelected'][5]")
+
+-- Initial progress check
+local initialMissing = checkMissingEntries(capturedData)
+print(string.format("\n📊 Starting Progress: %d blocks needed", initialMissing))
+end)
+
+
+
+
+
+
+
+
+local function clickGuiButton(button)
+    print(button:GetFullName())
+    -- Get the button's absolute position and size
+    local absPos = button.AbsolutePosition
+    local absSize = button.AbsoluteSize
+    
+    -- Get screen size
+    local screenSize = workspace.CurrentCamera.ViewportSize
+    
+    -- Calculate the center of the button
+    local centerX = absPos.X + (absSize.X / 2)
+    local centerY = absPos.Y + (absSize.Y / 2)
+    
+    -- Check if button is on screen
+    if absPos.X >= 0 and absPos.Y >= 0 and 
+       (absPos.X + absSize.X) <= screenSize.X and 
+       (absPos.Y + absSize.Y) <= screenSize.Y then
+        
+        -- Wait until Roblox is active
+        repeat
+            task.wait()
+        until isrbxactive()
+
+        -- Move mouse to the button's center position
+        mousemoveabs(centerX + math.random(-10, 10), centerY + 50)
+        
+        -- Small delay to ensure mouse has moved
+        task.wait()
+        
+        -- Click the button
+        mouse1click()
+    else
+        task.wait()
+    end
+end
+local list = {"Chassis","Wings","Propulsion","Mechanical","Other"}
+
+
+
+game:GetService("Players").LocalPlayer.PlayerGui.BuildGui.EnableBuilding:Fire()
+for _, category in list do
+    game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.Bindables.CategoryPressed:Fire(category)
+    task.wait(0.5)
+    for _, group in game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.BuildMenu.Container.Container.BlockMenu:GetChildren() do
+        if group:IsA("TextButton") then
+            local orig = group.LayoutOrder
+            group.LayoutOrder = -500
+            for _, button in group.Header.Container:GetChildren() do
+                if button:IsA("TextButton") then
+                    if math.round(group.Size.Y.Scale*1000)==109 then
+                        clickGuiButton(group)
+                        task.wait(1)
+                    end
+                    if button.ViewportFrame.BackgroundColor3==Color3.fromRGB(82, 82, 82) then
+                        repeat
+                            clickGuiButton(button)
+                        until button.ViewportFrame.BackgroundColor3==Color3.fromRGB(69, 137, 255)
+                        if math.round(game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.ResizeMenu.Position.Y.Scale)==1 then
+                            for i=1,2 do clickGuiButton(game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.ResizeMenu.Container.Left.Icon) end
+                            for i=1,10 do clickGuiButton(game:GetService("Players").LocalPlayer.PlayerGui.BuildGUI2.ResizeMenu.Container.Right.Icon) end
+                        end
+                    end
+                end
+            end
+            group.LayoutOrder = orig
+        end
+    end
+end
