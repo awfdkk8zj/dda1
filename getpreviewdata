@@ -185,6 +185,7 @@ local function clickGuiButton(button)
         
         -- Click the button
         mouse1click()
+        task.wait(0.2)
     else
         task.wait()
     end
